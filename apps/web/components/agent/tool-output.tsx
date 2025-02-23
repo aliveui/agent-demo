@@ -1,3 +1,5 @@
+"use client";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -20,25 +22,23 @@ interface ToolOutputProps {
 }
 
 export default function ToolOutput({ agentType }: ToolOutputProps) {
-  // This will be replaced with actual tool tracking logic
-  const mockTools: ToolAction[] = [
-    {
-      id: "1",
-      tool: "createTodo",
-      input: { text: "Buy groceries" },
-      output: { success: true, id: "123" },
-      timestamp: new Date(),
-      status: "success",
-    },
-    {
-      id: "2",
-      tool: "updateTodo",
-      input: { id: "123", completed: true },
-      output: { success: true },
-      timestamp: new Date(),
-      status: "success",
-    },
-  ];
+  const [tools, setTools] = useState<ToolAction[]>([]);
+
+  useEffect(() => {
+    // Set up event source for SSE
+    if (agentType === "vercel") {
+      const eventSource = new EventSource("/api/vercel/tools");
+
+      eventSource.onmessage = (event) => {
+        const toolAction: ToolAction = JSON.parse(event.data);
+        setTools((prev) => [...prev, toolAction]);
+      };
+
+      return () => {
+        eventSource.close();
+      };
+    }
+  }, [agentType]);
 
   return (
     <Card className="h-[800px] flex flex-col">
@@ -48,7 +48,7 @@ export default function ToolOutput({ agentType }: ToolOutputProps) {
       <CardContent className="flex-1">
         <ScrollArea className="h-full pr-4">
           <div className="space-y-4">
-            {mockTools.map((action) => (
+            {tools.map((action) => (
               <Card key={action.id} className="bg-muted">
                 <CardHeader className="py-3">
                   <div className="flex items-center justify-between">
