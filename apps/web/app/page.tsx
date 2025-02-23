@@ -12,9 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card";
-import TodoList from "@/components/todo/todo-list";
-import AgentChat from "@/components/agent/agent-chat";
-import ToolOutput from "@/components/agent/tool-output";
+
 import { Toaster } from "@workspace/ui/components/sonner";
 
 export default function Home() {
@@ -42,12 +40,10 @@ export default function Home() {
           <TabsContent key={agent} value={agent} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-4">
-                <TodoList agentType={agent} />
-                <AgentChat agentType={agent} />
+                {/* <TodoList agentType={agent} />
+                <AgentChat agentType={agent} /> */}
               </div>
-              <div>
-                <ToolOutput agentType={agent} />
-              </div>
+              <div></div>
             </div>
           </TabsContent>
         ))}
