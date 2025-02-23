@@ -4,8 +4,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
-      "@workspace/ui/*": ["../../packages/ui/src/*"],
-      "@agentic-demos/agents-vercel/*": ["../../agents/vercel-agent/*"]
+      "@workspace/ui/*": ["../../packages/ui/src/*"]
     },
     "plugins": [
       {

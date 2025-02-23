@@ -9,7 +9,6 @@ import {
 import { Button } from "@workspace/ui/components/button";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
-import { toast } from "sonner";
 
 interface Message {
   id: string;
@@ -41,41 +40,18 @@ export default function AgentChat({ agentType }: AgentChatProps) {
     setInput("");
     setIsLoading(true);
 
+    // TODO: Implement agent-specific message handling
     try {
-      if (agentType === "vercel") {
-        const response = await fetch("/api/vercel", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ message: input }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to get response from agent");
-        }
-
-        const data = await response.json();
-        const agentMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: data.response,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, agentMessage]);
-      } else {
-        // Placeholder for other agent types
-        const agentMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: `[${agentType}] This is a placeholder response. Actual agent integration pending.`,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, agentMessage]);
-      }
+      // Placeholder for agent response
+      const agentMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: `[${agentType}] This is a placeholder response. Actual agent integration pending.`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, agentMessage]);
     } catch (error) {
       console.error("Error sending message:", error);
-      toast.error("Failed to get response from agent");
     } finally {
       setIsLoading(false);
     }

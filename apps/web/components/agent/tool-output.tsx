@@ -1,5 +1,3 @@
-"use client";
-import { useState, useEffect, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -38,23 +36,25 @@ interface ToolOutputProps {
 }
 
 export default function ToolOutput({ agentType }: ToolOutputProps) {
-  const [tools, setTools] = useState<ToolAction[]>([]);
-
-  useEffect(() => {
-    // Set up event source for SSE
-    if (agentType === "vercel") {
-      const eventSource = new EventSource("/api/vercel/tools");
-
-      eventSource.onmessage = (event) => {
-        const toolAction: ToolAction = JSON.parse(event.data);
-        setTools((prev) => [...prev, toolAction]);
-      };
-
-      return () => {
-        eventSource.close();
-      };
-    }
-  }, [agentType]);
+  // This will be replaced with actual tool tracking logic
+  const mockTools: ToolAction[] = [
+    {
+      id: "1",
+      tool: "createTodo",
+      input: { text: "Buy groceries" },
+      output: { success: true, id: "123" },
+      timestamp: new Date(),
+      status: "success",
+    },
+    {
+      id: "2",
+      tool: "updateTodo",
+      input: { id: "123", completed: true },
+      output: { success: true },
+      timestamp: new Date(),
+      status: "success",
+    },
+  ];
 
   // Calculate statistics
   const stats: ToolStats = useMemo(() => {
@@ -122,6 +122,7 @@ export default function ToolOutput({ agentType }: ToolOutputProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1">
+<<<<<<< HEAD
         <Tabs defaultValue="metrics" className="h-full">
           <TabsList>
             <TabsTrigger value="metrics">Metrics</TabsTrigger>
@@ -133,6 +134,29 @@ export default function ToolOutput({ agentType }: ToolOutputProps) {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm">Success Rate</CardTitle>
+=======
+        <ScrollArea className="h-full pr-4">
+          <div className="space-y-4">
+            {mockTools.map((action) => (
+              <Card key={action.id} className="bg-muted">
+                <CardHeader className="py-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium">
+                      {action.tool}
+                    </CardTitle>
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs ${
+                        action.status === "success"
+                          ? "bg-green-100 text-green-800"
+                          : action.status === "error"
+                            ? "bg-red-100 text-red-800"
+                            : "bg-yellow-100 text-yellow-800"
+                      }`}
+                    >
+                      {action.status}
+                    </span>
+                  </div>
+>>>>>>> parent of 8824be1 (agent 1)
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-green-600">
