@@ -31,7 +31,16 @@ class ToolStore {
   }
 
   public emitToolAction(action: ToolAction) {
-    const message = `data: ${JSON.stringify(action)}\n\n`;
+    // Convert Date object to ISO string for serialization
+    const formattedAction = {
+      ...action,
+      timestamp:
+        action.timestamp instanceof Date
+          ? action.timestamp.toISOString()
+          : action.timestamp,
+    };
+
+    const message = `data: ${JSON.stringify(formattedAction)}\n\n`;
     this.controllers.forEach((controller) => {
       try {
         controller.enqueue(message);

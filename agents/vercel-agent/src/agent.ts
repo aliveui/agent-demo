@@ -99,7 +99,7 @@ export class TodoAgent {
           const todo = await this.store.addTodo({
             title: params.title,
             description: params.description,
-            priority: params.priority,
+            priority: params.priority || "medium",
             dueDate: params.dueDate,
             category: params.category,
             completed: false,
@@ -126,14 +126,23 @@ export class TodoAgent {
       }),
     ];
 
-    // Initialize the agent
-    this.initializeAgent(tools, model);
+    // Initialize the agent with system message
+    const systemMessage = `You are a helpful todo list manager. When listing todos, always return them in a clear format. For the listTodos command, return the raw JSON array without any additional text. For other commands, provide a brief confirmation of the action taken.`;
+
+    this.initializeAgent(tools, model, systemMessage);
   }
 
-  private async initializeAgent(tools: DynamicTool[], model: ChatOpenAI) {
+  private async initializeAgent(
+    tools: DynamicTool[],
+    model: ChatOpenAI,
+    systemMessage: string
+  ) {
     this.agent = await initializeAgentExecutorWithOptions(tools, model, {
       agentType: "chat-conversational-react-description",
       verbose: true,
+      agentArgs: {
+        systemMessage,
+      },
     });
   }
 
