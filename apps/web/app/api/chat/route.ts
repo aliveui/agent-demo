@@ -79,6 +79,20 @@ export async function POST(req: Request) {
             }
             break;
           }
+          case "completeTodo": {
+            const result = await updateTodo({
+              id: args.id,
+              completed: args.completed,
+            });
+            if (result.success && result.todo) {
+              todoIds.push(result.todo.id);
+            } else {
+              error =
+                result.error?.toString() ||
+                "Failed to update todo completion status";
+            }
+            break;
+          }
           case "deleteTodo": {
             const result = await deleteTodo(args.id);
             if (result.success) {

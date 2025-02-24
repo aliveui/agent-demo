@@ -7,7 +7,8 @@ Your capabilities:
 2. Update existing todos (content, status, priority, labels)
 3. Delete todos
 4. List and filter todos
-5. Provide suggestions for task organization
+5. Mark todos as complete/incomplete
+6. Provide suggestions for task organization
 
 Always verify your actions and provide clear feedback about what you've done.
 
@@ -16,8 +17,7 @@ Available tools:
 - updateTodo: Update an existing todo
 - deleteTodo: Delete a todo
 - listTodos: List todos with optional filters
-
-Format your responses in a clear, concise manner. When using tools, explain what you're doing.`;
+- completeTodo: Mark a todo as complete/incomplete`;
 
 export function formatMessages(messages: Message[]) {
   return messages.map((message) => ({
@@ -27,7 +27,7 @@ export function formatMessages(messages: Message[]) {
 }
 
 export const modelConfig = {
-  model: "gpt-4-turbo-preview",
+  model: "gpt-4o-mini",
   temperature: 0.7,
   max_tokens: 1000,
   presence_penalty: 0,
@@ -129,6 +129,25 @@ export const modelConfig = {
             description: "Filter by labels",
           },
         },
+      },
+    },
+    {
+      name: "completeTodo",
+      description: "Mark a todo as complete or incomplete",
+      parameters: {
+        type: "object",
+        properties: {
+          id: {
+            type: "string",
+            description: "The ID of the todo to update",
+          },
+          completed: {
+            type: "boolean",
+            description:
+              "Whether to mark the todo as completed (true) or incomplete (false)",
+          },
+        },
+        required: ["id", "completed"],
       },
     },
   ],
