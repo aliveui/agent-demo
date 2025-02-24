@@ -8,6 +8,12 @@ export interface Message extends AIMessage {
     toolCalls?: ToolCall[];
     todoIds?: string[];
     error?: string;
+    plan?: {
+      operation: string;
+      complexity: string;
+      requiredTools: string[];
+      context?: Record<string, any>;
+    };
   };
 }
 

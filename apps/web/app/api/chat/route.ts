@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
 import { Message } from "@/lib/types";
-import { systemPrompt, modelConfig } from "@/lib/agents/vercel/config";
+import { planOperation } from "@/lib/agents/vercel/orchestrator";
+import { executeOperation } from "@/lib/agents/vercel/workers";
 import { createTodo, updateTodo, deleteTodo, listTodos } from "@/lib/db";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
 
 export async function POST(req: Request) {
   try {
@@ -20,127 +16,135 @@ export async function POST(req: Request) {
       timestamp: new Date(),
     };
 
-    // Format messages for OpenAI
-    const messages = [
-      { role: "system" as const, content: systemPrompt },
-      { role: "user" as const, content: userMessage.content },
-    ];
-
-    // Call OpenAI
-    const completion = await openai.chat.completions.create({
-      messages,
-      ...modelConfig,
-    });
-
-    const response = completion.choices[0]?.message;
-    if (!response) {
-      throw new Error("No response from OpenAI");
+    // Step 1: Plan the operation using orchestrator
+    const operationPlan = await planOperation(message);
+    if (!operationPlan.success) {
+      throw new Error(operationPlan.error);
     }
 
-    const toolCalls = response.function_call ? [response.function_call] : [];
+    console.log("Operation plan:", {
+      intent: operationPlan.intent,
+      operation: operationPlan.plan.operation,
+      complexity: operationPlan.plan.complexity,
+      tools: operationPlan.plan.requiredTools,
+    });
 
-    // Handle tool calls
+    // Step 2: Execute the operation using appropriate worker
+    const execution = await executeOperation(
+      operationPlan.plan.operation,
+      operationPlan.plan.context,
+      operationPlan.intent || message // Use extracted intent if available
+    );
+    if (!execution.success || !execution.action) {
+      throw new Error(execution.error || "No action generated");
+    }
+
+    // Step 3: Execute the database operation
     let todoIds: string[] = [];
     let error: string | undefined;
 
-    if (response.function_call) {
-      const args = JSON.parse(response.function_call.arguments);
-      try {
-        switch (response.function_call.name) {
-          case "createTodo": {
-            const result = await createTodo({
-              content: args.content,
-              agentType,
-              createdBy: "agent",
-              priority: args.priority,
-              labels: args.labels,
-              complexity: args.complexity,
-            });
-            if (result.success && result.todo) {
-              todoIds.push(result.todo.id);
-            } else {
-              error = "Failed to create todo";
-            }
-            break;
+    try {
+      const args = execution.action.arguments;
+      switch (execution.action.name) {
+        case "createTodo": {
+          const result = await createTodo({
+            content: args.content,
+            agentType,
+            createdBy: "agent",
+            priority: args.priority,
+            labels: args.labels,
+            complexity: args.complexity,
+          });
+          if (result.success && result.todo) {
+            todoIds.push(result.todo.id);
+          } else {
+            error = "Failed to create todo";
           }
-          case "updateTodo": {
-            const result = await updateTodo({
-              id: args.id,
-              content: args.content,
-              completed: args.completed,
-              priority: args.priority,
-              labels: args.labels,
-              complexity: args.complexity,
-            });
-            if (result.success && result.todo) {
-              todoIds.push(result.todo.id);
-            } else {
-              error = result.error?.toString() || "Failed to update todo";
-            }
-            break;
-          }
-          case "completeTodo": {
-            const result = await updateTodo({
-              id: args.id,
-              completed: args.completed,
-            });
-            if (result.success && result.todo) {
-              todoIds.push(result.todo.id);
-            } else {
-              error =
-                result.error?.toString() ||
-                "Failed to update todo completion status";
-            }
-            break;
-          }
-          case "deleteTodo": {
-            const result = await deleteTodo(args.id);
-            if (result.success) {
-              todoIds.push(args.id);
-            } else {
-              error = result.error?.toString() || "Failed to delete todo";
-            }
-            break;
-          }
-          case "listTodos": {
-            const result = await listTodos({
-              agentType,
-              completed: args.completed,
-              priority: args.priority,
-              labels: args.labels,
-            });
-            if (result.success && result.todos) {
-              todoIds = result.todos.map((todo) => todo.id);
-            } else {
-              error = "Failed to list todos";
-            }
-            break;
-          }
-          default:
-            error = `Unknown function: ${response.function_call.name}`;
+          break;
         }
-      } catch (err) {
-        console.error("Error executing tool:", err);
-        error = err instanceof Error ? err.message : "Tool execution failed";
+        case "updateTodo": {
+          const result = await updateTodo({
+            id: args.id,
+            content: args.content,
+            completed: args.completed,
+            priority: args.priority,
+            labels: args.labels,
+            complexity: args.complexity,
+          });
+          if (result.success && result.todo) {
+            todoIds.push(result.todo.id);
+          } else {
+            error = result.error?.toString() || "Failed to update todo";
+          }
+          break;
+        }
+        case "completeTodo": {
+          const result = await updateTodo({
+            id: args.id,
+            completed: args.completed,
+          });
+          if (result.success && result.todo) {
+            todoIds.push(result.todo.id);
+          } else {
+            error =
+              result.error?.toString() ||
+              "Failed to update todo completion status";
+          }
+          break;
+        }
+        case "deleteTodo": {
+          const result = await deleteTodo(args.id);
+          if (result.success) {
+            todoIds.push(args.id);
+          } else {
+            error = result.error?.toString() || "Failed to delete todo";
+          }
+          break;
+        }
+        case "listTodos": {
+          const result = await listTodos({
+            agentType,
+            completed: args.completed,
+            priority: args.priority,
+            labels: args.labels,
+          });
+          if (result.success && result.todos) {
+            todoIds = result.todos.map((todo) => todo.id);
+          } else {
+            error = "Failed to list todos";
+          }
+          break;
+        }
+        default:
+          error = `Unknown action: ${execution.action.name}`;
       }
+    } catch (err) {
+      console.error("Error executing database operation:", err);
+      error = err instanceof Error ? err.message : "Database operation failed";
     }
 
     // Create assistant message
     const assistantMessage: Message = {
       id: crypto.randomUUID(),
       role: "assistant",
-      content: response.content ?? "",
+      content: execution.explanation ?? "",
       timestamp: new Date(),
       metadata: {
-        toolCalls: toolCalls.map((call) => ({
-          id: crypto.randomUUID(),
-          type: "function",
-          name: call.name,
-          arguments: call.arguments,
-          error: error,
-        })),
+        toolCalls: [
+          {
+            id: crypto.randomUUID(),
+            type: "function",
+            name: execution.action.name,
+            arguments: JSON.stringify(execution.action.arguments),
+            error: error,
+          },
+        ],
         todoIds,
         error,
+        plan: {
+          ...operationPlan.plan,
+          intent: operationPlan.intent,
+        },
       },
     };
 
