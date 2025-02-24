@@ -191,9 +191,11 @@ Present results in a clear, organized manner.`,
 export async function executeOperation(
   operation: string,
   context: any,
-  message: string
+  message: string,
+  chatContext: Message[] = []
 ) {
   console.log("Executing operation:", { operation, context, message });
+  console.log("Chat context:", chatContext.length, "messages");
 
   const worker = workers[operation];
   if (!worker) {
@@ -217,6 +219,10 @@ export async function executeOperation(
       max_tokens: worker.max_tokens,
       messages: [
         { role: "system", content: worker.systemPrompt },
+        ...chatContext.map((msg) => ({
+          role: msg.role === "data" ? "user" : msg.role,
+          content: msg.content,
+        })),
         {
           role: "user",
           content: `${message}\n\nContext: ${JSON.stringify(context, null, 2)}`,

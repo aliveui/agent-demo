@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { Message } from "@/lib/types";
 import { planOperation } from "@/lib/agents/vercel/orchestrator";
 import { executeOperation } from "@/lib/agents/vercel/workers";
+import { evaluateResponse } from "@/lib/agents/vercel/evaluator";
 import { createTodo, updateTodo, deleteTodo, listTodos } from "@/lib/db";
 
 export async function POST(req: Request) {
   try {
-    const { message, agentType } = await req.json();
+    const { message, agentType, messages = [] } = await req.json();
 
     // Create user message
     const userMessage: Message = {
@@ -16,8 +17,11 @@ export async function POST(req: Request) {
       timestamp: new Date(),
     };
 
+    // Add user message to context
+    const chatContext = [...messages, userMessage];
+
     // Step 1: Plan the operation using orchestrator
-    const operationPlan = await planOperation(message);
+    const operationPlan = await planOperation(message, chatContext);
     if (!operationPlan.success) {
       throw new Error(operationPlan.error);
     }
@@ -33,7 +37,8 @@ export async function POST(req: Request) {
     const execution = await executeOperation(
       operationPlan.plan.operation,
       operationPlan.plan.context,
-      operationPlan.intent || message // Use extracted intent if available
+      message,
+      chatContext
     );
     if (!execution.success || !execution.action) {
       throw new Error(execution.error || "No action generated");
@@ -123,11 +128,20 @@ export async function POST(req: Request) {
       error = err instanceof Error ? err.message : "Database operation failed";
     }
 
+    // Step 4: Evaluate and optimize the response
+    const responseEvaluation = await evaluateResponse(
+      message,
+      execution.explanation ?? "",
+      chatContext
+    );
+
     // Create assistant message
     const assistantMessage: Message = {
       id: crypto.randomUUID(),
       role: "assistant",
-      content: execution.explanation ?? "",
+      content: responseEvaluation.success
+        ? responseEvaluation.finalResponse
+        : (execution.explanation ?? ""),
       timestamp: new Date(),
       metadata: {
         toolCalls: [
@@ -145,6 +159,9 @@ export async function POST(req: Request) {
           ...operationPlan.plan,
           intent: operationPlan.intent,
         },
+        evaluation: responseEvaluation.success
+          ? responseEvaluation.evaluation
+          : undefined,
       },
     };
 

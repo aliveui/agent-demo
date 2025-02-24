@@ -83,9 +83,13 @@ Example operations:
 
 Provide clear, actionable plans that workers can execute efficiently.`;
 
-export async function planOperation(message: string) {
+export async function planOperation(
+  message: string,
+  chatContext: Message[] = []
+) {
   try {
     console.log("Planning operation for message:", message);
+    console.log("Chat context:", chatContext.length, "messages");
 
     // First, get the user's intent and context
     const intentCompletion = await openai.chat.completions.create({
@@ -96,8 +100,12 @@ export async function planOperation(message: string) {
         {
           role: "system",
           content:
-            "Extract the user's intent and any relevant context from their message. Focus on todo-related actions and details.",
+            "Extract the user's intent and any relevant context from their message and chat history. Focus on todo-related actions and details.",
         },
+        ...chatContext.map((msg) => ({
+          role: msg.role === "data" ? "user" : msg.role,
+          content: msg.content,
+        })),
         { role: "user", content: message },
       ],
     });
@@ -120,6 +128,10 @@ export async function planOperation(message: string) {
       max_tokens: orchestratorConfig.max_tokens,
       messages: [
         { role: "system", content: orchestratorPrompt },
+        ...chatContext.map((msg) => ({
+          role: msg.role === "data" ? "user" : msg.role,
+          content: msg.content,
+        })),
         { role: "user", content: message },
         { role: "assistant", content: `Extracted intent: ${userIntent}` },
       ],

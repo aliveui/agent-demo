@@ -13,6 +13,16 @@ export interface Message extends AIMessage {
       complexity: string;
       requiredTools: string[];
       context?: Record<string, any>;
+      intent?: string;
+    };
+    evaluation?: {
+      qualityScore: number;
+      requiresAction: boolean;
+      isConversational: boolean;
+      contextRetention: number;
+      specificIssues: string[];
+      improvementSuggestions: string[];
+      suggestedResponse?: string;
     };
   };
 }
