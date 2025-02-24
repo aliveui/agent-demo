@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Tabs,
   TabsContent,
@@ -15,15 +15,49 @@ import {
   CardTitle,
 } from "@workspace/ui/components/card";
 import { ChatContainer } from "@/components/chat/ChatContainer";
-import { Message, AgentType } from "@/lib/types";
+import { Message, AgentType, Todo } from "@/lib/types";
 import { Toaster } from "@workspace/ui/components/sonner";
 import { toast } from "sonner";
 
 export default function Home() {
   const [activeAgent, setActiveAgent] = useState<AgentType>("vercel");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [todos, setTodos] = useState<Todo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch todos when agent changes or todos are affected
+  useEffect(() => {
+    const fetchTodos = async () => {
+      try {
+        // Get affected todoIds from messages
+        const todoIds = messages
+          .flatMap((msg) => msg.metadata?.todoIds || [])
+          .filter((id) => id);
+
+        // Build URL with query params
+        const url = new URL("/api/todos", window.location.origin);
+        url.searchParams.set("agentType", activeAgent);
+        if (todoIds.length > 0) {
+          url.searchParams.set("todoIds", todoIds.join(","));
+        }
+
+        // Fetch todos
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.success && data.todos) {
+          setTodos(data.todos);
+        } else if (!data.success) {
+          console.error("Failed to fetch todos:", data.error);
+        }
+      } catch (err) {
+        console.error("Error fetching todos:", err);
+      }
+    };
+
+    fetchTodos();
+  }, [messages, activeAgent]);
 
   const handleSendMessage = async (content: string) => {
     try {
@@ -115,6 +149,7 @@ export default function Home() {
                   onSendMessage={handleSendMessage}
                   isLoading={isLoading}
                   error={error}
+                  todos={todos}
                 />
               </div>
             </div>

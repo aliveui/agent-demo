@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { Message } from "@/lib/types";
 import { systemPrompt, modelConfig } from "@/lib/agents/vercel/config";
-import { createTodo } from "@/lib/db";
+import { createTodo, updateTodo, deleteTodo, listTodos } from "@/lib/db";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -40,22 +40,74 @@ export async function POST(req: Request) {
     const toolCalls = response.function_call ? [response.function_call] : [];
 
     // Handle tool calls
-    let todoId: string | undefined;
+    let todoIds: string[] = [];
+    let error: string | undefined;
+
     if (response.function_call) {
       const args = JSON.parse(response.function_call.arguments);
-      switch (response.function_call.name) {
-        case "createTodo":
-          const result = await createTodo({
-            content: args.content,
-            agentType,
-            createdBy: "agent",
-          });
-          if (result.success && result.todo) {
-            todoId = result.todo.id;
+      try {
+        switch (response.function_call.name) {
+          case "createTodo": {
+            const result = await createTodo({
+              content: args.content,
+              agentType,
+              createdBy: "agent",
+              priority: args.priority,
+              labels: args.labels,
+              complexity: args.complexity,
+            });
+            if (result.success && result.todo) {
+              todoIds.push(result.todo.id);
+            } else {
+              error = "Failed to create todo";
+            }
+            break;
           }
-          break;
-        default:
-          throw new Error(`Unknown function: ${response.function_call.name}`);
+          case "updateTodo": {
+            const result = await updateTodo({
+              id: args.id,
+              content: args.content,
+              completed: args.completed,
+              priority: args.priority,
+              labels: args.labels,
+              complexity: args.complexity,
+            });
+            if (result.success && result.todo) {
+              todoIds.push(result.todo.id);
+            } else {
+              error = result.error?.toString() || "Failed to update todo";
+            }
+            break;
+          }
+          case "deleteTodo": {
+            const result = await deleteTodo(args.id);
+            if (result.success) {
+              todoIds.push(args.id);
+            } else {
+              error = result.error?.toString() || "Failed to delete todo";
+            }
+            break;
+          }
+          case "listTodos": {
+            const result = await listTodos({
+              agentType,
+              completed: args.completed,
+              priority: args.priority,
+              labels: args.labels,
+            });
+            if (result.success && result.todos) {
+              todoIds = result.todos.map((todo) => todo.id);
+            } else {
+              error = "Failed to list todos";
+            }
+            break;
+          }
+          default:
+            error = `Unknown function: ${response.function_call.name}`;
+        }
+      } catch (err) {
+        console.error("Error executing tool:", err);
+        error = err instanceof Error ? err.message : "Tool execution failed";
       }
     }
 
@@ -71,8 +123,10 @@ export async function POST(req: Request) {
           type: "function",
           name: call.name,
           arguments: call.arguments,
+          error: error,
         })),
-        todoIds: todoId ? [todoId] : [],
+        todoIds,
+        error,
       },
     };
 

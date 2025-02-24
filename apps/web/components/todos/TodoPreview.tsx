@@ -36,7 +36,7 @@ export function TodoPreview({ todo, isNew }: TodoPreviewProps) {
           {todo.priority > 0 && (
             <Badge variant="secondary">Priority {todo.priority}</Badge>
           )}
-          {todo.labels.map((label) => (
+          {todo.labels?.map((label) => (
             <Badge key={label} variant="outline">
               {label}
             </Badge>
