@@ -1,50 +1,93 @@
 import { NextResponse } from "next/server";
-import { Message, AgentType } from "@/lib/types";
-import { sql } from "@vercel/postgres";
+import OpenAI from "openai";
+import { Message } from "@/lib/types";
+import { systemPrompt, modelConfig } from "@/lib/agents/vercel/config";
+import { createTodo } from "@/lib/db";
 
-export async function POST(request: Request) {
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY!,
+});
+
+export async function POST(req: Request) {
   try {
-    const { message, agentType } = await request.json();
+    const { message, agentType } = await req.json();
 
-    // Create a new interaction record
-    const interactionId = crypto.randomUUID();
-    const startTime = Date.now();
+    // Create user message
+    const userMessage: Message = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: message,
+      timestamp: new Date(),
+    };
 
-    // TODO: Implement actual agent interaction
-    // For now, just echo the message
-    const response: Message = {
+    // Format messages for OpenAI
+    const messages = [
+      { role: "system" as const, content: systemPrompt },
+      { role: "user" as const, content: userMessage.content },
+    ];
+
+    // Call OpenAI
+    const completion = await openai.chat.completions.create({
+      messages,
+      ...modelConfig,
+    });
+
+    const response = completion.choices[0]?.message;
+    if (!response) {
+      throw new Error("No response from OpenAI");
+    }
+
+    const toolCalls = response.function_call ? [response.function_call] : [];
+
+    // Handle tool calls
+    let todoId: string | undefined;
+    if (response.function_call) {
+      const args = JSON.parse(response.function_call.arguments);
+      switch (response.function_call.name) {
+        case "createTodo":
+          const result = await createTodo({
+            content: args.content,
+            agentType,
+            createdBy: "agent",
+          });
+          if (result.success && result.todo) {
+            todoId = result.todo.id;
+          }
+          break;
+        default:
+          throw new Error(`Unknown function: ${response.function_call.name}`);
+      }
+    }
+
+    // Create assistant message
+    const assistantMessage: Message = {
       id: crypto.randomUUID(),
       role: "assistant",
-      content: `Echo: ${message} (from ${agentType} agent)`,
+      content: response.content ?? "",
       timestamp: new Date(),
       metadata: {
-        toolCalls: [],
-        todoIds: [],
+        toolCalls: toolCalls.map((call) => ({
+          id: crypto.randomUUID(),
+          type: "function",
+          name: call.name,
+          arguments: call.arguments,
+        })),
+        todoIds: todoId ? [todoId] : [],
       },
     };
 
-    // Record the interaction
-    await sql`
-      INSERT INTO agent_interactions (
-        id, agent_type, user_input, agent_output,
-        duration, success, todo_ids, tools_used
-      ) VALUES (
-        ${interactionId},
-        ${agentType},
-        ${message},
-        ${response.content},
-        ${Date.now() - startTime},
-        ${true},
-        ${JSON.stringify([])},
-        ${JSON.stringify([])}
-      )
-    `;
-
-    return NextResponse.json({ success: true, message: response });
+    return NextResponse.json({
+      success: true,
+      message: assistantMessage,
+    });
   } catch (error) {
     console.error("Error in chat endpoint:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to process message" },
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to process message",
+      },
       { status: 500 }
     );
   }

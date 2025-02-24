@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { Message } from "@/lib/types";
+import { Message, Todo } from "@/lib/types";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
@@ -10,6 +10,7 @@ interface ChatContainerProps {
   onSendMessage: (message: string) => void;
   isLoading?: boolean;
   error?: string | null;
+  todos?: Todo[];
 }
 
 export function ChatContainer({
@@ -17,6 +18,7 @@ export function ChatContainer({
   onSendMessage,
   isLoading = false,
   error = null,
+  todos = [],
 }: ChatContainerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -29,13 +31,14 @@ export function ChatContainer({
 
   return (
     <div className="flex flex-col h-[600px] border rounded-lg bg-background">
-      <ScrollArea className="flex-1 p-4">
+      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
         <div className="space-y-4">
           {messages.map((message, i) => (
             <ChatMessage
               key={message.id}
               message={message}
               isLast={i === messages.length - 1}
+              todos={todos}
             />
           ))}
           {isLoading && (

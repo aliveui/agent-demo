@@ -30,15 +30,6 @@ export default function Home() {
       setIsLoading(true);
       setError(null);
 
-      // Add user message
-      const userMessage: Message = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, userMessage]);
-
       // Send to API
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -52,8 +43,22 @@ export default function Home() {
         throw new Error(data.error || "Failed to get response");
       }
 
-      // Add assistant message
-      setMessages((prev) => [...prev, data.message]);
+      // Add messages
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "user",
+          content,
+          timestamp: new Date(),
+        },
+        data.message,
+      ]);
+
+      // Show success message if a tool was used
+      if (data.message.metadata?.toolCalls?.length) {
+        toast.success("Action completed successfully");
+      }
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "An error occurred";

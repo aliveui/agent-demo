@@ -1,9 +1,8 @@
+import { Message as AIMessage } from "ai";
+
 export type AgentType = "vercel" | "langchain" | "mastra" | "kaiban";
 
-export interface Message {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
+export interface Message extends AIMessage {
   timestamp: Date;
   metadata?: {
     toolCalls?: ToolCall[];
@@ -14,10 +13,9 @@ export interface Message {
 
 export interface ToolCall {
   id: string;
-  type: string;
+  type: "function";
   name: string;
-  arguments: Record<string, any>;
-  result?: any;
+  arguments: string;
   error?: string;
 }
 
@@ -32,12 +30,11 @@ export interface Todo {
   id: string;
   content: string;
   completed: boolean;
-  agentType: AgentType;
-  createdBy: "user" | "agent";
-  metadata?: Record<string, any>;
   priority: number;
   labels: string[];
   complexity: number;
+  agentType: AgentType;
+  createdBy: string;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -1,14 +1,19 @@
 import { cn } from "@workspace/ui/lib/utils";
-import { Message } from "@/lib/types";
+import { Message, Todo } from "@/lib/types";
 import { Card, CardContent } from "@workspace/ui/components/card";
+import { TodoPreview } from "../todos/TodoPreview";
 
 interface ChatMessageProps {
   message: Message;
   isLast: boolean;
+  todos?: Todo[];
 }
 
-export function ChatMessage({ message, isLast }: ChatMessageProps) {
+export function ChatMessage({ message, isLast, todos = [] }: ChatMessageProps) {
   const isUser = message.role === "user";
+  const affectedTodos = todos.filter((todo) =>
+    message.metadata?.todoIds?.includes(todo.id)
+  );
 
   return (
     <div
@@ -23,28 +28,46 @@ export function ChatMessage({ message, isLast }: ChatMessageProps) {
       >
         <CardContent className="p-3">
           <div className="prose dark:prose-invert">{message.content}</div>
-          {message.metadata?.toolCalls && (
-            <div className="mt-2 text-sm opacity-80">
-              <div className="font-semibold">Tools Used:</div>
-              {message.metadata.toolCalls.map((tool) => (
-                <div key={tool.id} className="ml-2">
-                  • {tool.name}
-                  {tool.error && (
-                    <span className="text-destructive">
-                      {" "}
-                      (Error: {tool.error})
-                    </span>
-                  )}
+
+          {/* Tool Calls */}
+          {message.metadata?.toolCalls &&
+            message.metadata.toolCalls.length > 0 && (
+              <div className="mt-2 text-sm opacity-80">
+                <div className="font-semibold">Tools Used:</div>
+                {message.metadata.toolCalls.map((tool) => (
+                  <div key={tool.id} className="ml-2">
+                    • {tool.name}
+                    {tool.error && (
+                      <span className="text-destructive">
+                        {" "}
+                        (Error: {tool.error})
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+          {/* Todo Previews */}
+          {affectedTodos.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <div className="text-sm font-semibold">
+                {affectedTodos.length === 1
+                  ? "1 todo affected"
+                  : `${affectedTodos.length} todos affected`}
+              </div>
+              {affectedTodos.map((todo) => (
+                <div key={todo.id} className="ml-2">
+                  <TodoPreview
+                    todo={todo}
+                    isNew={message.metadata?.toolCalls?.some(
+                      (tool) =>
+                        tool.name === "createTodo" &&
+                        tool.arguments.id === todo.id
+                    )}
+                  />
                 </div>
               ))}
-            </div>
-          )}
-          {message.metadata?.todoIds && message.metadata.todoIds.length > 0 && (
-            <div className="mt-2 text-sm opacity-80">
-              <div className="font-semibold">Affected Todos:</div>
-              <div className="ml-2">
-                • {message.metadata.todoIds.length} todo(s) modified
-              </div>
             </div>
           )}
         </CardContent>
