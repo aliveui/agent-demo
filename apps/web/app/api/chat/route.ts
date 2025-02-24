@@ -4,9 +4,11 @@ import { planOperation } from "@/lib/agents/vercel/orchestrator";
 import { executeOperation } from "@/lib/agents/vercel/workers";
 import { evaluateResponse } from "@/lib/agents/vercel/evaluator";
 import { createTodo, updateTodo, deleteTodo, listTodos } from "@/lib/db";
+import { trackInteraction } from "@/lib/metrics";
 
 export async function POST(req: Request) {
   try {
+    const startTime = Date.now();
     const { message, agentType, messages = [] } = await req.json();
 
     // Create user message
@@ -15,6 +17,9 @@ export async function POST(req: Request) {
       role: "user",
       content: message,
       timestamp: new Date(),
+      metadata: {
+        activeAgent: agentType,
+      },
     };
 
     // Add user message to context
@@ -31,6 +36,7 @@ export async function POST(req: Request) {
       operation: operationPlan.plan.operation,
       complexity: operationPlan.plan.complexity,
       tools: operationPlan.plan.requiredTools,
+      matchedTask: operationPlan.matchedTask,
     });
 
     // Step 2: Execute the operation using appropriate worker
@@ -47,9 +53,22 @@ export async function POST(req: Request) {
     // Step 3: Execute the database operation
     let todoIds: string[] = [];
     let error: string | undefined;
+    let matchedContent: string | undefined;
+    let todoSuccess = 0;
+    let todoFailed = 0;
 
     try {
       const args = execution.action.arguments;
+
+      // If we have a matched todo by content, use it in the response
+      if (
+        operationPlan.plan.context?.matchedTodo &&
+        (execution.action.name === "completeTodo" ||
+          execution.action.name === "updateTodo")
+      ) {
+        matchedContent = operationPlan.plan.context.matchedTodo.content;
+      }
+
       switch (execution.action.name) {
         case "createTodo": {
           const result = await createTodo({
@@ -62,8 +81,10 @@ export async function POST(req: Request) {
           });
           if (result.success && result.todo) {
             todoIds.push(result.todo.id);
+            todoSuccess++;
           } else {
             error = "Failed to create todo";
+            todoFailed++;
           }
           break;
         }
@@ -78,8 +99,10 @@ export async function POST(req: Request) {
           });
           if (result.success && result.todo) {
             todoIds.push(result.todo.id);
+            todoSuccess++;
           } else {
             error = result.error?.toString() || "Failed to update todo";
+            todoFailed++;
           }
           break;
         }
@@ -90,10 +113,12 @@ export async function POST(req: Request) {
           });
           if (result.success && result.todo) {
             todoIds.push(result.todo.id);
+            todoSuccess++;
           } else {
             error =
               result.error?.toString() ||
               "Failed to update todo completion status";
+            todoFailed++;
           }
           break;
         }
@@ -101,8 +126,10 @@ export async function POST(req: Request) {
           const result = await deleteTodo(args.id);
           if (result.success) {
             todoIds.push(args.id);
+            todoSuccess++;
           } else {
             error = result.error?.toString() || "Failed to delete todo";
+            todoFailed++;
           }
           break;
         }
@@ -115,17 +142,21 @@ export async function POST(req: Request) {
           });
           if (result.success && result.todos) {
             todoIds = result.todos.map((todo) => todo.id);
+            todoSuccess++;
           } else {
             error = "Failed to list todos";
+            todoFailed++;
           }
           break;
         }
         default:
           error = `Unknown action: ${execution.action.name}`;
+          todoFailed++;
       }
     } catch (err) {
       console.error("Error executing database operation:", err);
       error = err instanceof Error ? err.message : "Database operation failed";
+      todoFailed++;
     }
 
     // Step 4: Evaluate and optimize the response
@@ -134,6 +165,9 @@ export async function POST(req: Request) {
       execution.explanation ?? "",
       chatContext
     );
+
+    // Calculate total response time
+    const responseTime = Date.now() - startTime;
 
     // Create assistant message
     const assistantMessage: Message = {
@@ -144,6 +178,7 @@ export async function POST(req: Request) {
         : (execution.explanation ?? ""),
       timestamp: new Date(),
       metadata: {
+        activeAgent: agentType,
         toolCalls: [
           {
             id: crypto.randomUUID(),
@@ -155,6 +190,8 @@ export async function POST(req: Request) {
         ],
         todoIds,
         error,
+        matchedTask: operationPlan.matchedTask,
+        matchedContent,
         plan: {
           ...operationPlan.plan,
           intent: operationPlan.intent,
@@ -164,6 +201,16 @@ export async function POST(req: Request) {
           : undefined,
       },
     };
+
+    // Track this interaction
+    await trackInteraction(agentType, message, assistantMessage, {
+      responseTime,
+      success: !error,
+      todoSuccessCount: todoSuccess,
+      todoFailCount: todoFailed,
+      // We don't have token usage data yet
+      tokenUsage: undefined,
+    });
 
     return NextResponse.json({
       success: true,

@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { Message, AgentType } from "@/lib/types";
+import { findTodoByContent } from "@/lib/db";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -68,6 +69,11 @@ For each request, you MUST:
 
 ALWAYS use the planTodoOperation function to respond with your analysis.
 
+When users refer to todos by description rather than ID:
+- Extract the task description from their message ("I've walked the dogs" -> "walk the dogs")
+- For completion tasks, include the extracted task in the context
+- For updates, include both the task description and the updates
+
 Consider:
 - Data validation requirements
 - State management implications
@@ -77,6 +83,7 @@ Consider:
 Example operations:
 - "create a new todo" -> create operation, createTodo tool
 - "mark todo as done" -> complete operation, completeTodo tool
+- "I've walked the dogs" -> complete operation, completeTodo tool with "walk the dogs" as context
 - "update priority" -> update operation, updateTodo tool
 - "delete todo" -> delete operation, deleteTodo tool
 - "show all todos" -> list operation, listTodos tool
@@ -100,7 +107,7 @@ export async function planOperation(
         {
           role: "system",
           content:
-            "Extract the user's intent and any relevant context from their message and chat history. Focus on todo-related actions and details.",
+            "Extract the user's intent and any relevant context from their message and chat history. Focus on todo-related actions and details. If the user implies they've completed a task, extract the task description.",
         },
         ...chatContext.map((msg) => ({
           role: msg.role === "data" ? "user" : msg.role,
@@ -120,6 +127,28 @@ export async function planOperation(
     }
     console.log("Extracted user intent:", userIntent);
 
+    // Extract potential task descriptions for content matching
+    const taskExtraction = await openai.chat.completions.create({
+      model: orchestratorConfig.model,
+      temperature: 0.3,
+      max_tokens: 200,
+      messages: [
+        {
+          role: "system",
+          content: `Extract any task descriptions from the user's message that might match a todo item.
+For example:
+- "I've finished walking the dogs" -> "walk the dogs" or "walking the dogs"
+- "Just finished grocery shopping" -> "grocery shopping" or "buy groceries"
+- "Updated the project plan" -> "update project plan"
+Output only the extracted task in simplified form. If no task is mentioned, respond with "NO_TASK_MENTIONED".`,
+        },
+        { role: "user", content: message },
+      ],
+    });
+
+    const extractedTask = taskExtraction.choices[0]?.message?.content?.trim();
+    console.log("Extracted potential task:", extractedTask);
+
     // Then, plan the operation
     console.log("Generating operation plan...");
     const planCompletion = await openai.chat.completions.create({
@@ -133,7 +162,14 @@ export async function planOperation(
           content: msg.content,
         })),
         { role: "user", content: message },
-        { role: "assistant", content: `Extracted intent: ${userIntent}` },
+        {
+          role: "assistant",
+          content: `Extracted intent: ${userIntent}\n${
+            extractedTask && extractedTask !== "NO_TASK_MENTIONED"
+              ? `Potential task reference: ${extractedTask}`
+              : ""
+          }`,
+        },
       ],
       functions: orchestratorConfig.functions,
       function_call: { name: "planTodoOperation" },
@@ -169,10 +205,56 @@ export async function planOperation(
         };
       }
 
+      // If we're updating/completing a todo by content reference, try to find matching todos
+      if (
+        (plan.operation === "complete" || plan.operation === "update") &&
+        plan.context?.content &&
+        !plan.context.todoId &&
+        extractedTask &&
+        extractedTask !== "NO_TASK_MENTIONED"
+      ) {
+        // Get active agent type from chat context
+        // Default to "vercel" if we can't determine the agent type
+        let agentType: AgentType = "vercel";
+
+        // Try to extract agent type from message metadata
+        const messagesWithAgentType = chatContext.filter(
+          (m) => m.metadata && "activeAgent" in (m.metadata as any)
+        );
+
+        if (messagesWithAgentType.length > 0) {
+          const latestWithAgentType =
+            messagesWithAgentType[messagesWithAgentType.length - 1];
+          if (latestWithAgentType && latestWithAgentType.metadata) {
+            agentType =
+              (latestWithAgentType.metadata as any).activeAgent || "vercel";
+          }
+        }
+
+        // Try to find a todo that matches the extracted content
+        const contentSearch = await findTodoByContent(
+          plan.context.content || extractedTask,
+          agentType
+        );
+
+        if (
+          contentSearch.success &&
+          contentSearch.todos &&
+          contentSearch.todos.length > 0
+        ) {
+          // Add the todoId to the plan context
+          plan.context.todoId = contentSearch.todos[0].id;
+          plan.context.matchedTodo = contentSearch.todos[0];
+          console.log("Matched todo by content:", contentSearch.todos[0]);
+        }
+      }
+
       return {
         success: true,
         plan,
         intent: userIntent,
+        matchedTask:
+          extractedTask !== "NO_TASK_MENTIONED" ? extractedTask : undefined,
       };
     } catch (parseError) {
       console.error("Error parsing plan:", parseError);

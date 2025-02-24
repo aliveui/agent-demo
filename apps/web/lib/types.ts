@@ -8,6 +8,9 @@ export interface Message extends AIMessage {
     toolCalls?: ToolCall[];
     todoIds?: string[];
     error?: string;
+    activeAgent?: AgentType;
+    matchedTask?: string;
+    matchedContent?: string;
     plan?: {
       operation: string;
       complexity: string;

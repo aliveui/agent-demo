@@ -12,6 +12,28 @@ export async function testConnection() {
   }
 }
 
+// Create a custom error type for database operations
+export class DatabaseError extends Error {
+  constructor(
+    message: string,
+    public operation: string,
+    public originalError?: unknown
+  ) {
+    super(message);
+    this.name = "DatabaseError";
+  }
+}
+
+// Helper to format errors consistently
+function formatDbError(operation: string, error: unknown): DatabaseError {
+  console.error(`Database error during ${operation}:`, error);
+  return new DatabaseError(
+    error instanceof Error ? error.message : `Error during ${operation}`,
+    operation,
+    error
+  );
+}
+
 // Create a new todo
 export async function createTodo(todo: {
   content: string;
@@ -42,8 +64,7 @@ export async function createTodo(todo: {
     );
     return { success: true, todo: result.rows[0] };
   } catch (error) {
-    console.error("Error creating todo:", error);
-    return { success: false, error };
+    throw formatDbError("createTodo", error);
   }
 }
 
@@ -174,6 +195,42 @@ export async function listTodos(filters?: {
     return { success: true, todos: result.rows };
   } catch (error) {
     console.error("Error listing todos:", error);
+    return { success: false, error };
+  }
+}
+
+// Find todos by similar content
+export async function findTodoByContent(content: string, agentType: AgentType) {
+  try {
+    // Use ILIKE for case-insensitive matching with PostgreSQL
+    const result = await sql.query(
+      `SELECT * FROM todos 
+       WHERE agent_type = $1 
+       AND content ILIKE $2
+       ORDER BY 
+         CASE WHEN content ILIKE $3 THEN 0 
+              WHEN content ILIKE $4 THEN 1
+              ELSE 2 
+         END,
+         created_at DESC
+       LIMIT 5;`,
+      [
+        agentType,
+        `%${content}%`, // Partial match anywhere
+        `${content}`, // Exact match
+        `%${content}`, // Starts with match
+      ]
+    );
+
+    return {
+      success: true,
+      todos: result.rows,
+      exactMatch: result.rows.some(
+        (todo) => todo.content.toLowerCase() === content.toLowerCase()
+      ),
+    };
+  } catch (error) {
+    console.error("Error finding todo by content:", error);
     return { success: false, error };
   }
 }
