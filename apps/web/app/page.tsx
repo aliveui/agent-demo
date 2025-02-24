@@ -18,13 +18,24 @@ import { ChatContainer } from "@/components/chat/ChatContainer";
 import { Message, AgentType, Todo } from "@/lib/types";
 import { Toaster } from "@workspace/ui/components/sonner";
 import { toast } from "sonner";
+import { TodoList } from "@/components/todos/TodoList";
 
 export default function Home() {
   const [activeAgent, setActiveAgent] = useState<AgentType>("vercel");
   const [messages, setMessages] = useState<Message[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [todoFilter, setTodoFilter] = useState<"all" | "completed" | "pending">(
+    "all"
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Filter todos based on selected filter
+  const filteredTodos = todos.filter((todo) => {
+    if (todoFilter === "completed") return todo.completed;
+    if (todoFilter === "pending") return !todo.completed;
+    return true;
+  });
 
   // Fetch todos when agent changes or todos are affected
   useEffect(() => {
@@ -103,6 +114,32 @@ export default function Home() {
     }
   };
 
+  const handleToggleComplete = async (id: string, completed: boolean) => {
+    try {
+      const response = await fetch("/api/todos", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, completed }),
+      });
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || "Failed to update todo");
+      }
+
+      // Update local state
+      setTodos((prev) =>
+        prev.map((todo) => (todo.id === id ? { ...todo, completed } : todo))
+      );
+
+      toast.success(`Todo marked as ${completed ? "completed" : "incomplete"}`);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to update todo";
+      toast.error(errorMessage);
+    }
+  };
+
   return (
     <main className="container mx-auto p-4">
       <Card className="mb-8">
@@ -130,18 +167,12 @@ export default function Home() {
         {["vercel", "langchain", "mastra", "kaiban"].map((agent) => (
           <TabsContent key={agent} value={agent} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-4">
-                {/* Todo list will go here */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Todos</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-muted-foreground">
-                      Todo list coming soon...
-                    </p>
-                  </CardContent>
-                </Card>
+              <div>
+                <TodoList
+                  todos={filteredTodos}
+                  onFilterChange={setTodoFilter}
+                  onToggleComplete={handleToggleComplete}
+                />
               </div>
               <div>
                 <ChatContainer

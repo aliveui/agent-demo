@@ -7,13 +7,19 @@ import {
 } from "@workspace/ui/components/card";
 import { Badge } from "@workspace/ui/components/badge";
 import { CheckCircle2, Circle } from "lucide-react";
+import { Button } from "@workspace/ui/components/button";
 
 interface TodoPreviewProps {
   todo: Todo;
   isNew?: boolean;
+  onToggleComplete?: (id: string, completed: boolean) => void;
 }
 
-export function TodoPreview({ todo, isNew }: TodoPreviewProps) {
+export function TodoPreview({
+  todo,
+  isNew,
+  onToggleComplete,
+}: TodoPreviewProps) {
   return (
     <Card className={isNew ? "border-primary" : undefined}>
       {isNew && (
@@ -23,12 +29,25 @@ export function TodoPreview({ todo, isNew }: TodoPreviewProps) {
       )}
       <CardHeader className="p-4 pb-2">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
-          {todo.completed ? (
-            <CheckCircle2 className="w-4 h-4 text-primary" />
-          ) : (
-            <Circle className="w-4 h-4 text-muted-foreground" />
-          )}
-          {todo.content}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="p-0 h-auto hover:bg-transparent"
+            onClick={() => onToggleComplete?.(todo.id, !todo.completed)}
+          >
+            {todo.completed ? (
+              <CheckCircle2 className="w-4 h-4 text-primary" />
+            ) : (
+              <Circle className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors" />
+            )}
+          </Button>
+          <span
+            className={
+              todo.completed ? "line-through text-muted-foreground" : ""
+            }
+          >
+            {todo.content}
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="p-4 pt-0">

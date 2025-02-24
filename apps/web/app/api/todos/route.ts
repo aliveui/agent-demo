@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { testConnection, createTodo, listTodos } from "@/lib/db";
+import { testConnection, createTodo, listTodos, updateTodo } from "@/lib/db";
 import { AgentType } from "@/lib/types";
 
 // Test database connection
@@ -47,6 +47,24 @@ export async function POST(request: Request) {
     console.error("Error in POST /api/todos:", error);
     return NextResponse.json(
       { success: false, error: "Failed to create todo" },
+      { status: 500 }
+    );
+  }
+}
+
+// Update a todo
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const result = await updateTodo({
+      id: body.id,
+      completed: body.completed,
+    });
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error("Error in PUT /api/todos:", error);
+    return NextResponse.json(
+      { success: false, error: "Failed to update todo" },
       { status: 500 }
     );
   }
