@@ -79,7 +79,11 @@ export default function Home() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: content, agentType: activeAgent }),
+        body: JSON.stringify({
+          message: content,
+          agentType: activeAgent,
+          messages: messages, // Pass all previous messages for context
+        }),
       });
 
       const data = await response.json();

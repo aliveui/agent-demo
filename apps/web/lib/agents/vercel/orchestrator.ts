@@ -73,6 +73,18 @@ When users refer to todos by description rather than ID:
 - Extract the task description from their message ("I've walked the dogs" -> "walk the dogs")
 - For completion tasks, include the extracted task in the context
 - For updates, include both the task description and the updates
+- For delete tasks, extract the description of the task to be deleted
+
+Pay special attention to delete operations:
+- If a user says "delete the last task", look at the most recently created task
+- If a user says "delete the task about X", extract "X" as the content to search for
+- If a user says "remove all completed tasks", plan a delete operation for completed tasks
+- Handle references like "get rid of that task" by looking at the conversation history
+
+Remember the chat history when processing requests:
+- Use previous messages to understand which task is being referenced
+- If the user refers to "it" or "that task", check the most recently mentioned task
+- If a user says "delete it", look for the most recently discussed task in the conversation
 
 Consider:
 - Data validation requirements
@@ -87,8 +99,54 @@ Example operations:
 - "update priority" -> update operation, updateTodo tool
 - "delete todo" -> delete operation, deleteTodo tool
 - "show all todos" -> list operation, listTodos tool
+- "delete the grocery shopping task" -> delete operation, deleteTodo tool with "grocery shopping" as content to search
+- "get rid of it" -> delete operation for the most recently mentioned task
 
 Provide clear, actionable plans that workers can execute efficiently.`;
+
+/**
+ * Extract recent context from chat history
+ */
+function extractRecentContext(chatContext: Message[]) {
+  if (chatContext.length <= 1) return null;
+
+  // Get the most recent messages (limit to last 5)
+  const recentMessages = chatContext.slice(-5);
+
+  // Extract todo IDs mentioned in recent messages
+  const recentTodoIds = recentMessages
+    .flatMap((msg) => msg.metadata?.todoIds || [])
+    .filter((id) => id);
+
+  // Extract matched content or tasks mentioned
+  const recentTaskDescriptions = recentMessages
+    .map((msg) => msg.metadata?.matchedTask || msg.metadata?.matchedContent)
+    .filter((task) => !!task);
+
+  // Find most recently completed or updated todo
+  const recentlyModifiedTodos = recentMessages
+    .filter((msg) => {
+      const toolCalls = msg.metadata?.toolCalls || [];
+      return toolCalls.some(
+        (tool) =>
+          tool.name === "completeTodo" ||
+          tool.name === "updateTodo" ||
+          tool.name === "createTodo"
+      );
+    })
+    .flatMap((msg) => msg.metadata?.todoIds || [])
+    .filter((id) => id);
+
+  return {
+    recentTodoIds: recentTodoIds.length > 0 ? recentTodoIds : null,
+    mostRecentTodoId:
+      recentTodoIds.length > 0 ? recentTodoIds[recentTodoIds.length - 1] : null,
+    recentTaskDescriptions:
+      recentTaskDescriptions.length > 0 ? recentTaskDescriptions : null,
+    recentlyModifiedTodos:
+      recentlyModifiedTodos.length > 0 ? recentlyModifiedTodos : null,
+  };
+}
 
 export async function planOperation(
   message: string,
@@ -205,9 +263,11 @@ Output only the extracted task in simplified form. If no task is mentioned, resp
         };
       }
 
-      // If we're updating/completing a todo by content reference, try to find matching todos
+      // If we're updating/completing/deleting a todo by content reference, try to find matching todos
       if (
-        (plan.operation === "complete" || plan.operation === "update") &&
+        (plan.operation === "complete" ||
+          plan.operation === "update" ||
+          plan.operation === "delete") &&
         plan.context?.content &&
         !plan.context.todoId &&
         extractedTask &&
@@ -232,8 +292,11 @@ Output only the extracted task in simplified form. If no task is mentioned, resp
         }
 
         // Try to find a todo that matches the extracted content
+        const contentToSearch = plan.context.content || extractedTask;
+        console.log("Searching for todo by content:", contentToSearch);
+
         const contentSearch = await findTodoByContent(
-          plan.context.content || extractedTask,
+          contentToSearch,
           agentType
         );
 
@@ -246,6 +309,29 @@ Output only the extracted task in simplified form. If no task is mentioned, resp
           plan.context.todoId = contentSearch.todos[0].id;
           plan.context.matchedTodo = contentSearch.todos[0];
           console.log("Matched todo by content:", contentSearch.todos[0]);
+        } else if (plan.operation === "delete" && chatContext.length > 1) {
+          // For delete operations with no direct content match, try to find the most recently discussed todo
+          console.log(
+            "No direct content match for delete. Looking for recently mentioned todos..."
+          );
+
+          // Extract recent context from chat history
+          const recentContext = extractRecentContext(chatContext);
+
+          if (recentContext && recentContext.mostRecentTodoId) {
+            // Use the most recent todo ID
+            plan.context.todoId = recentContext.mostRecentTodoId;
+            console.log(
+              "Using most recently mentioned todo:",
+              recentContext.mostRecentTodoId
+            );
+
+            // If we have recent task descriptions, add them to the context for better responses
+            if (recentContext.recentTaskDescriptions) {
+              plan.context.recentTaskDescriptions =
+                recentContext.recentTaskDescriptions;
+            }
+          }
         }
       }
 

@@ -136,7 +136,19 @@ Ensure proper feedback for completion actions.`,
     systemPrompt: `You are a todo deletion specialist.
 Focus on safely removing todos while maintaining referential integrity.
 Verify deletion permissions and handle cascading effects.
-Provide clear feedback about deletion results.`,
+Provide clear feedback about deletion results.
+
+When processing delete requests:
+1. Always first check if a specific todo ID is provided
+2. If a content match is available, use it to confirm the right task is being deleted
+3. If working with "most recent" or "it" references, explain which task is being deleted
+4. If multiple matches are possible, delete the most recently created one unless specified
+5. Provide context in your response about what was deleted
+
+For example:
+- If deleting "buy groceries", mention "Deleted the 'buy groceries' task"
+- If deleting based on recent context, say "Deleted the most recently discussed task: [task content]"
+- If a specific ID is used, confirm with "Task successfully deleted"`,
     functions: [
       {
         name: "deleteTodo",
@@ -213,6 +225,31 @@ export async function executeOperation(
       availableFunctions: worker.functions.map((f) => f.name),
     });
 
+    // Enhance context with information about matched todos or recent tasks
+    let enhancedContext = { ...context };
+
+    // If we have a matched todo, add its details to the context
+    if (context.matchedTodo) {
+      enhancedContext.matchedTodoDetails = {
+        content: context.matchedTodo.content,
+        completed: context.matchedTodo.completed,
+        createdAt: context.matchedTodo.createdAt,
+      };
+    }
+
+    // If we have recent task descriptions, add them for reference
+    if (context.recentTaskDescriptions) {
+      enhancedContext.recentTaskDescriptions = context.recentTaskDescriptions;
+    }
+
+    // For delete operations specifically, add more context
+    if (operation === "delete" && context.todoId) {
+      enhancedContext.isContextualDelete = !context.content;
+      enhancedContext.deleteSource = context.content
+        ? "content match"
+        : "recent reference";
+    }
+
     const completion = await openai.chat.completions.create({
       model: worker.model,
       temperature: worker.temperature,
@@ -225,7 +262,7 @@ export async function executeOperation(
         })),
         {
           role: "user",
-          content: `${message}\n\nContext: ${JSON.stringify(context, null, 2)}`,
+          content: `${message}\n\nContext: ${JSON.stringify(enhancedContext, null, 2)}`,
         },
       ],
       functions: worker.functions,

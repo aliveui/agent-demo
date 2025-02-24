@@ -36,6 +36,8 @@ export interface ToolCall {
   name: string;
   arguments: string;
   error?: string;
+  validation?: Record<string, any>;
+  verification?: Record<string, any>;
 }
 
 export interface ChatState {
