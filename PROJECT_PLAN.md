@@ -236,7 +236,6 @@ OPENAI_API_KEY=sk-...  # Shared across all agents
 
 # Database Configuration
 POSTGRES_URL=postgres://...  # Neon DB connection
-POSTGRES_PRISMA_URL=postgres://...  # Prisma connection
 
 # Authentication
 NEXTAUTH_URL=http://localhost:3000
