@@ -13,6 +13,22 @@ import { trackInteraction } from "@/lib/metrics";
 
 export async function POST(req: Request) {
   try {
+    // Get API key from headers or environment variable
+    const apiKey =
+      req.headers.get("X-OpenAI-Key") || process.env.OPENAI_API_KEY;
+
+    // Validate API key
+    if (!apiKey) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "OpenAI API key is required. Please provide it in the request headers or set it in the environment variables.",
+        },
+        { status: 401 }
+      );
+    }
+
     const startTime = Date.now();
     const { message, agentType, messages = [] } = await req.json();
 
@@ -29,6 +45,11 @@ export async function POST(req: Request) {
 
     // Add user message to context
     const chatContext = [...messages, userMessage];
+
+    // Configure OpenAI client with provided API key
+    if (apiKey) {
+      process.env.OPENAI_API_KEY = apiKey;
+    }
 
     // Step 1: Plan the operation using orchestrator
     const operationPlan = await planOperation(message, chatContext);
@@ -268,12 +289,11 @@ export async function POST(req: Request) {
       }
     }
   } catch (error) {
-    console.error("Error in chat endpoint:", error);
+    console.error("Error in chat API:", error);
     return NextResponse.json(
       {
         success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to process message",
+        error: error instanceof Error ? error.message : "An error occurred",
       },
       { status: 500 }
     );

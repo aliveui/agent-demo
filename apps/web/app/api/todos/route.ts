@@ -2,9 +2,39 @@ import { NextResponse } from "next/server";
 import { testConnection, createTodo, listTodos, updateTodo } from "@/lib/db";
 import { AgentType } from "@/lib/types";
 
+// Helper function to validate API key
+const validateApiKey = (req: Request) => {
+  const apiKey = req.headers.get("X-OpenAI-Key") || process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    return {
+      valid: false,
+      response: NextResponse.json(
+        {
+          success: false,
+          error:
+            "OpenAI API key is required. Please provide it in the request headers or set it in the environment variables.",
+        },
+        { status: 401 }
+      ),
+    };
+  }
+
+  // Set API key for OpenAI client
+  process.env.OPENAI_API_KEY = apiKey;
+
+  return { valid: true };
+};
+
 // Test database connection
 export async function GET(request: Request) {
   try {
+    // Validate API key
+    const keyValidation = validateApiKey(request);
+    if (!keyValidation.valid) {
+      return keyValidation.response;
+    }
+
     const { searchParams } = new URL(request.url);
     const agentType = searchParams.get("agentType") as AgentType | null;
     const todoIds = searchParams.get("todoIds")?.split(",").filter(Boolean);
@@ -33,6 +63,12 @@ export async function GET(request: Request) {
 // Create a new todo
 export async function POST(request: Request) {
   try {
+    // Validate API key
+    const keyValidation = validateApiKey(request);
+    if (!keyValidation.valid) {
+      return keyValidation.response;
+    }
+
     const body = await request.json();
     const result = await createTodo({
       content: body.content,
@@ -55,6 +91,12 @@ export async function POST(request: Request) {
 // Update a todo
 export async function PUT(request: Request) {
   try {
+    // Validate API key
+    const keyValidation = validateApiKey(request);
+    if (!keyValidation.valid) {
+      return keyValidation.response;
+    }
+
     const body = await request.json();
     const result = await updateTodo({
       id: body.id,

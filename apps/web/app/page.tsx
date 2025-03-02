@@ -13,6 +13,17 @@ import { Message, AgentType, Todo } from "@/lib/types";
 import { Toaster } from "@workspace/ui/components/sonner";
 import { toast } from "sonner";
 import { TodoList } from "@/components/todos/TodoList";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@workspace/ui/components/dialog";
+import { Button } from "@workspace/ui/components/button";
+import { Input } from "@workspace/ui/components/input";
+import { Label } from "@workspace/ui/components/label";
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -24,6 +35,32 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   // Always use Vercel agent
   const agentType: AgentType = "vercel";
+
+  // API key management
+  const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
+  const [apiKey, setApiKey] = useState<string>("");
+  const [apiKeyInput, setApiKeyInput] = useState<string>("");
+
+  // Check if API key exists in localStorage on component mount
+  useEffect(() => {
+    const storedApiKey = localStorage.getItem("openai_api_key");
+    if (storedApiKey) {
+      setApiKey(storedApiKey);
+    } else {
+      setApiKeyModalOpen(true);
+    }
+  }, []);
+
+  const handleSaveApiKey = () => {
+    if (apiKeyInput.trim()) {
+      localStorage.setItem("openai_api_key", apiKeyInput);
+      setApiKey(apiKeyInput);
+      setApiKeyModalOpen(false);
+      toast.success("API key saved successfully");
+    } else {
+      toast.error("Please enter a valid API key");
+    }
+  };
 
   // Filter todos based on selected filter
   const filteredTodos = todos.filter((todo) => {
@@ -66,6 +103,13 @@ export default function Home() {
   }, [messages]);
 
   const handleSendMessage = async (content: string) => {
+    // Check if API key is available
+    if (!apiKey) {
+      setApiKeyModalOpen(true);
+      toast.error("OpenAI API key is required");
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
@@ -73,7 +117,10 @@ export default function Home() {
       // Send to API
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-OpenAI-Key": apiKey,
+        },
         body: JSON.stringify({
           message: content,
           agentType: agentType,
@@ -84,6 +131,18 @@ export default function Home() {
       const data = await response.json();
 
       if (!data.success) {
+        // If API key is invalid, prompt for a new one
+        if (
+          data.error?.toLowerCase().includes("api key") ||
+          data.error?.toLowerCase().includes("authentication")
+        ) {
+          localStorage.removeItem("openai_api_key");
+          setApiKey("");
+          setApiKeyModalOpen(true);
+          throw new Error(
+            "Invalid API key. Please provide a valid OpenAI API key."
+          );
+        }
         throw new Error(data.error || "Failed to get response");
       }
 
@@ -114,10 +173,20 @@ export default function Home() {
   };
 
   const handleToggleComplete = async (id: string, completed: boolean) => {
+    // Check if API key is available
+    if (!apiKey) {
+      setApiKeyModalOpen(true);
+      toast.error("OpenAI API key is required");
+      return;
+    }
+
     try {
       const response = await fetch("/api/todos", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-OpenAI-Key": apiKey,
+        },
         body: JSON.stringify({ id, completed }),
       });
 
@@ -178,6 +247,46 @@ export default function Home() {
           />
         </div>
       </div>
+
+      {/* API Key Modal */}
+      <Dialog open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enter your OpenAI API Key</DialogTitle>
+            <DialogDescription>
+              This application requires an OpenAI API key to function. Your key
+              will be stored locally in your browser and is never sent to our
+              servers.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-1 gap-2">
+              <Label htmlFor="api-key">OpenAI API Key</Label>
+              <Input
+                id="api-key"
+                type="password"
+                placeholder="sk-..."
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Don't have an API key? Get one from{" "}
+                <a
+                  href="https://platform.openai.com/api-keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary underline"
+                >
+                  OpenAI's website
+                </a>
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleSaveApiKey}>Save API Key</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Toaster />
     </main>

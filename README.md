@@ -1,31 +1,5 @@
-# shadcn/ui monorepo template
+# Vercel AI-Powered Todo Application
 
-This template is for creating a monorepo with shadcn/ui.
+A smart todo application using Vercel AI SDK to help you manage tasks through natural language. Simply chat with the AI assistant to create, modify, and organize your tasks.
 
-## Usage
-
-```bash
-pnpm dlx shadcn@latest init
-```
-
-## Adding components
-
-To add components to your app, run the following command at the root of your `web` app:
-
-```bash
-pnpm dlx shadcn@latest add button -c apps/web
-```
-
-This will place the ui components in the `packages/ui/src/components` directory.
-
-## Tailwind
-
-Your `tailwind.config.ts` and `globals.css` are already set up to use the components from the `ui` package.
-
-## Using components
-
-To use the components in your app, import them from the `ui` package.
-
-```tsx
-import { Button } from "@workspace/ui/components/ui/button"
-```
+This application demonstrates how AI agents can enhance productivity by understanding your intentions through natural conversation. Try commands like "Add a task to call mom", "Show my completed tasks", or "Mark the first task as done" to see it in action.
