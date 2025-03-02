@@ -2,12 +2,6 @@
 
 import { useState, useEffect } from "react";
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@workspace/ui/components/tabs";
-import {
   Card,
   CardContent,
   CardDescription,
@@ -21,7 +15,6 @@ import { toast } from "sonner";
 import { TodoList } from "@/components/todos/TodoList";
 
 export default function Home() {
-  const [activeAgent, setActiveAgent] = useState<AgentType>("vercel");
   const [messages, setMessages] = useState<Message[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [todoFilter, setTodoFilter] = useState<"all" | "completed" | "pending">(
@@ -29,6 +22,8 @@ export default function Home() {
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Always use Vercel agent
+  const agentType: AgentType = "vercel";
 
   // Filter todos based on selected filter
   const filteredTodos = todos.filter((todo) => {
@@ -37,7 +32,7 @@ export default function Home() {
     return true;
   });
 
-  // Fetch todos when agent changes or todos are affected
+  // Fetch todos when messages are affected
   useEffect(() => {
     const fetchTodos = async () => {
       try {
@@ -48,7 +43,7 @@ export default function Home() {
 
         // Build URL with query params
         const url = new URL("/api/todos", window.location.origin);
-        url.searchParams.set("agentType", activeAgent);
+        url.searchParams.set("agentType", agentType);
         if (todoIds.length > 0) {
           url.searchParams.set("todoIds", todoIds.join(","));
         }
@@ -68,7 +63,7 @@ export default function Home() {
     };
 
     fetchTodos();
-  }, [messages, activeAgent]);
+  }, [messages]);
 
   const handleSendMessage = async (content: string) => {
     try {
@@ -81,7 +76,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: content,
-          agentType: activeAgent,
+          agentType: agentType,
           messages: messages, // Pass all previous messages for context
         }),
       });
@@ -148,49 +143,41 @@ export default function Home() {
     <main className="container mx-auto p-4">
       <Card className="mb-8">
         <CardHeader>
-          <CardTitle>Agentic AI Technology Comparison</CardTitle>
+          <CardTitle>Vercel AI-Powered Todo Application</CardTitle>
           <CardDescription>
-            Compare different AI agent implementations through a todo
-            application
+            A smart todo application using Vercel AI SDK to help you manage
+            tasks through natural language. Simply chat with the AI assistant to
+            create, modify, and organize your tasks.
           </CardDescription>
         </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">
+            This application demonstrates how AI agents can enhance productivity
+            by understanding your intentions through natural conversation. Try
+            commands like "Add a task to call mom", "Show my completed tasks",
+            or "Mark the first task as done" to see it in action.
+          </p>
+        </CardContent>
       </Card>
 
-      <Tabs
-        value={activeAgent}
-        onValueChange={(value) => setActiveAgent(value as AgentType)}
-        className="space-y-4"
-      >
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="vercel">Vercel AI</TabsTrigger>
-          <TabsTrigger value="langchain">LangChain</TabsTrigger>
-          <TabsTrigger value="mastra">Mastra</TabsTrigger>
-          <TabsTrigger value="kaiban">Kaiban</TabsTrigger>
-        </TabsList>
-
-        {["vercel", "langchain", "mastra", "kaiban"].map((agent) => (
-          <TabsContent key={agent} value={agent} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <TodoList
-                  todos={filteredTodos}
-                  onFilterChange={setTodoFilter}
-                  onToggleComplete={handleToggleComplete}
-                />
-              </div>
-              <div>
-                <ChatContainer
-                  messages={messages}
-                  onSendMessage={handleSendMessage}
-                  isLoading={isLoading}
-                  error={error}
-                  todos={todos}
-                />
-              </div>
-            </div>
-          </TabsContent>
-        ))}
-      </Tabs>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <TodoList
+            todos={filteredTodos}
+            onFilterChange={setTodoFilter}
+            onToggleComplete={handleToggleComplete}
+          />
+        </div>
+        <div>
+          <ChatContainer
+            messages={messages}
+            onSendMessage={handleSendMessage}
+            isLoading={isLoading}
+            error={error}
+            todos={todos}
+          />
+        </div>
+      </div>
 
       <Toaster />
     </main>

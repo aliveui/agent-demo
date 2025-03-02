@@ -60,11 +60,11 @@ export function TodoPreview({
               {label}
             </Badge>
           ))}
-          {todo.complexity > 0 && (
+          {/* {todo.complexity > 0 && (
             <Badge variant="secondary">
               Complexity: {Math.round(todo.complexity * 100)}%
             </Badge>
-          )}
+          )} */}
         </div>
       </CardContent>
     </Card>
