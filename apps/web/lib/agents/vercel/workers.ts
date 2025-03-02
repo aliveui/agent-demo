@@ -229,7 +229,7 @@ export async function executeOperation(
     let enhancedContext = { ...context };
 
     // If we have a matched todo, add its details to the context
-    if (context.matchedTodo) {
+    if (context?.matchedTodo) {
       enhancedContext.matchedTodoDetails = {
         content: context.matchedTodo.content,
         completed: context.matchedTodo.completed,
@@ -238,14 +238,14 @@ export async function executeOperation(
     }
 
     // If we have recent task descriptions, add them for reference
-    if (context.recentTaskDescriptions) {
+    if (context?.recentTaskDescriptions) {
       enhancedContext.recentTaskDescriptions = context.recentTaskDescriptions;
     }
 
     // For delete operations specifically, add more context
-    if (operation === "delete" && context.todoId) {
+    if (operation === "delete" && context?.todoId) {
       enhancedContext.isContextualDelete = !context.content;
-      enhancedContext.deleteSource = context.content
+      enhancedContext.deleteSource = context?.content
         ? "content match"
         : "recent reference";
     }
